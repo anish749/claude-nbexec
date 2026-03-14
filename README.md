@@ -41,6 +41,10 @@ This is the same protocol VS Code uses when you connect a local notebook to a re
 
 **Self-documenting from the CLI.** The agent runs `nbexec --help` and gets everything it needs — commands, options, examples, workflow patterns. No need to embed documentation in MCP tool descriptions or maintain it in two places.
 
+## Inspiration
+
+The architectural pattern — a long-lived daemon process, CLI-driven interaction, persistent state across calls, and a skill file for agent discovery — is inspired by [OpenClaw](https://github.com/openclaw/openclaw). nbexec applies the same intuition to a narrower problem: giving AI coding agents structured access to remote Jupyter kernels.
+
 ## Installation
 
 Requires Python 3.10+ and [uv](https://docs.astral.sh/uv/).
