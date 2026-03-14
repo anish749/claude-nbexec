@@ -85,13 +85,12 @@ Commands:
       waits for completion, prints the output to stdout, and records the
       cell and outputs in the session's notebook file.
 
-      The code can be provided via --code, --file, or piped via stdin.
       Exit code is 0 on success, 1 on execution error.
 
       Options:
         --session ID       Session ID (required)
-        --code CODE        Code string to execute
-        --file PATH        File containing code to execute
+        --file PATH        File containing code to execute (recommended)
+        --code CODE        Code string to execute (simple one-liners only)
         --timeout SECONDS  Execution timeout (default: 300)
 
       If neither --code nor --file is given, reads code from stdin.
@@ -99,12 +98,19 @@ Commands:
       Variables persist across exec calls within the same session (same
       kernel). Each exec appends a new cell to the notebook.
 
-      Examples:
-        nbexec exec --session spark --code "print('hello')"
-        nbexec exec --session spark --code "df = spark.sql('SELECT count(*) FROM videos')"
-        nbexec exec --session spark --code "df.show()"
-        nbexec exec --session spark --file /tmp/query.py
-        echo "1 + 1" | nbexec exec --session spark
+      IMPORTANT — how to send code:
+
+        Prefer --file for anything beyond a trivial one-liner. Write the
+        code to a temporary file first, then pass the path. This avoids
+        bash escaping issues with quotes, newlines, and special characters
+        that are common in Python/SQL code.
+
+        Use --code only for simple single-line expressions like:
+          nbexec exec --session spark --code "df.show()"
+          nbexec exec --session spark --code "print(x)"
+
+        For multiline code, write to a file first, then use --file:
+          nbexec exec --session spark --file /tmp/cell.py
 
 Agent Workflow Examples:
 
@@ -112,25 +118,9 @@ Agent Workflow Examples:
     nbexec daemon start
     nbexec session create --server http://localhost:8888 --token $TOKEN \\
         --notebook ./session.ipynb --name spark
-    nbexec exec --session spark --code "from pyspark.sql import SparkSession"
-    nbexec exec --session spark --code "spark = SparkSession.builder.getOrCreate()"
-    nbexec exec --session spark --code "spark.sql('SHOW TABLES').show()"
-    nbexec exec --session spark --code "df = spark.sql('SELECT platform, count(*) as cnt FROM videos GROUP BY platform')"
     nbexec exec --session spark --code "df.show()"
+    nbexec exec --session spark --file /tmp/query.py --timeout 120
     nbexec session close --session spark
-    nbexec daemon stop
-
-  Multiple sessions to different servers:
-    nbexec daemon start
-    nbexec session create --server http://localhost:8888 --token $T1 \\
-        --notebook ./prod.ipynb --name prod
-    nbexec session create --server http://localhost:9999 --token $T2 \\
-        --notebook ./staging.ipynb --name staging
-    nbexec exec --session prod --code "spark.sql('SELECT count(*) FROM videos').show()"
-    nbexec exec --session staging --code "spark.sql('SELECT count(*) FROM videos').show()"
-    nbexec session list
-    nbexec session close --session prod
-    nbexec session close --session staging
     nbexec daemon stop
 
   Inspect what was executed:
