@@ -1,0 +1,21 @@
+[project]
+name = "nbexec"
+version = "0.1.0"
+description = "CLI daemon that proxies code execution to remote Jupyter kernels with local notebook logging"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "click>=8.1",
+    "jupyter-kernel-client>=0.3",
+    "nbformat>=5.9",
+]
+
+[project.scripts]
+nbexec = "nbexec.cli.main:cli"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/nbexec"]
