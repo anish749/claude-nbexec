@@ -12,7 +12,7 @@ def session():
 
 @session.command()
 @click.option("--server", required=True, help="Jupyter server URL (e.g. http://localhost:8888)")
-@click.option("--token", required=True, help="Jupyter server token")
+@click.option("--token", default="", help="Jupyter server token (optional if server has no auth)")
 @click.option("--notebook", required=True, help="Path for the local .ipynb file")
 @click.option("--name", default=None, help="Session name (auto-generated if omitted)")
 @click.option("--kernel", "kernel_name", default="python3", help="Kernel name")

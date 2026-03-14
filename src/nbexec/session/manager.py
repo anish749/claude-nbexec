@@ -1,6 +1,7 @@
 from pathlib import Path
 from datetime import datetime, timezone
 
+import requests
 from jupyter_kernel_client import KernelClient
 
 from .notebook import NotebookWriter
@@ -31,11 +32,29 @@ class Session:
 
     def start(self) -> None:
         self.notebook = NotebookWriter(self.notebook_path)
+
+        # Fetch XSRF cookie from the server (needed for POST requests)
+        headers = {}
+        xsrf_cookie = self._fetch_xsrf_cookie()
+        if xsrf_cookie:
+            headers["X-XSRFToken"] = xsrf_cookie
+            headers["Cookie"] = f"_xsrf={xsrf_cookie}"
+
         self.kernel = KernelClient(
             server_url=self.server_url,
-            token=self.token,
+            token=self.token or None,
+            headers=headers,
         )
-        self.kernel.start(kernel_name=self.kernel_name)
+        self.kernel.start(name=self.kernel_name)
+
+    def _fetch_xsrf_cookie(self) -> str | None:
+        """Fetch XSRF token from the Jupyter server."""
+        try:
+            resp = requests.get(f"{self.server_url}/tree", timeout=10)
+            xsrf = resp.cookies.get("_xsrf")
+            return xsrf
+        except Exception:
+            return None
 
     def execute(self, code: str) -> dict:
         if self.kernel is None or self.notebook is None:
@@ -65,16 +84,17 @@ class Session:
             }
 
         outputs = self._extract_outputs(reply)
+        exec_count = reply.get("execution_count", self._execution_count)
         self.notebook.set_outputs(cell_index, outputs)
-        self.notebook.set_execution_count(cell_index, self._execution_count)
+        self.notebook.set_execution_count(cell_index, exec_count)
         self.notebook.flush()
 
         text = self._outputs_to_text(outputs)
-        status = reply.get("status", "ok") if isinstance(reply, dict) else "ok"
+        status = reply.get("status", "ok")
 
         return {
             "status": status,
-            "execution_count": self._execution_count,
+            "execution_count": exec_count,
             "cell_index": cell_index,
             "outputs": outputs,
             "text": text,
@@ -104,42 +124,13 @@ class Session:
         }
 
     @staticmethod
-    def _extract_outputs(reply) -> list[dict]:
-        """Extract outputs from jupyter-kernel-client reply."""
-        # jupyter-kernel-client returns different structures depending on version.
-        # Handle both dict-based and object-based replies.
-        if isinstance(reply, dict):
-            # Direct dict with outputs key
-            if "outputs" in reply:
-                return reply["outputs"]
-            # Content might have stdout/stderr or data
-            content = reply.get("content", reply)
-            outputs = []
-            if "text" in content:
-                outputs.append({
-                    "output_type": "stream",
-                    "name": "stdout",
-                    "text": content["text"],
-                })
-            if "data" in content:
-                outputs.append({
-                    "output_type": "execute_result",
-                    "data": content["data"],
-                    "metadata": content.get("metadata", {}),
-                })
-            return outputs
+    def _extract_outputs(reply: dict) -> list[dict]:
+        """Extract outputs from jupyter-kernel-client reply.
 
-        # Object with attributes — adapt as needed
-        outputs = []
-        if hasattr(reply, "outputs"):
-            return list(reply.outputs)
-        if hasattr(reply, "text") and reply.text:
-            outputs.append({
-                "output_type": "stream",
-                "name": "stdout",
-                "text": reply.text,
-            })
-        return outputs
+        Reply format: {"execution_count": int, "status": str, "outputs": list[dict]}
+        Outputs follow nbformat structure.
+        """
+        return reply.get("outputs", [])
 
     @staticmethod
     def _outputs_to_text(outputs: list[dict]) -> str:
