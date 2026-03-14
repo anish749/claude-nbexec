@@ -29,6 +29,8 @@ This is the same protocol VS Code uses when you connect a local notebook to a re
 
 ## Why a CLI and not an MCP server or raw HTTP
 
+**Agents don't think in cells.** Existing Jupyter MCP servers expose notebook operations — create cell, edit cell, move cell, run cell. But an agent executing code on a remote kernel doesn't care about cells. It just wants to send code and get results. It doesn't need to edit cell 5 or reorder cells — if something went wrong, it sends corrected code as the next execution. nbexec matches this model: send code, get output, move on. The notebook is just a side effect for human review, not something the agent manages.
+
 **Clean context.** An MCP server's tool definitions live in the agent's prompt at all times. nbexec adds nothing to the prompt until the agent actually needs it — the skill loads on demand, and `--help` is only fetched when invoked.
 
 **Full visibility.** Everything inside an MCP server is opaque to the agent — it can only call the tools that are exposed. With a CLI, the agent has access to the source code, can inspect how things work, and can understand or work around issues on its own.
