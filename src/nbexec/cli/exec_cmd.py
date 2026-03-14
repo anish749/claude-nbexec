@@ -11,7 +11,7 @@ from .client import send_to_daemon
 @click.option("--session", "session_id", required=True, help="Session ID")
 @click.option("--code", default=None, help="Code to execute")
 @click.option("--file", "file_path", default=None, type=click.Path(exists=True), help="File containing code to execute")
-@click.option("--timeout", default=300.0, type=float, help="Execution timeout in seconds")
+@click.option("--timeout", default=None, type=float, help="Execution timeout in seconds (default: no timeout)")
 def exec_code(session_id, code, file_path, timeout):
     """Execute code on a remote kernel."""
     if code is None and file_path is None:

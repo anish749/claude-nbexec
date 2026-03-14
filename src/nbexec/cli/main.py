@@ -91,7 +91,7 @@ Commands:
         --session ID       Session ID (required)
         --file PATH        File containing code to execute (recommended)
         --code CODE        Code string to execute (simple one-liners only)
-        --timeout SECONDS  Execution timeout (default: 300)
+        --timeout SECONDS  Execution timeout (default: no timeout).
 
       If neither --code nor --file is given, reads code from stdin.
 
@@ -119,7 +119,7 @@ Agent Workflow Examples:
     nbexec session create --server http://localhost:8888 --token $TOKEN \\
         --notebook ./session.ipynb --name spark
     nbexec exec --session spark --code "df.show()"
-    nbexec exec --session spark --file /tmp/query.py --timeout 120
+    nbexec exec --session spark --file /tmp/query.py
     nbexec session close --session spark
     nbexec daemon stop
 

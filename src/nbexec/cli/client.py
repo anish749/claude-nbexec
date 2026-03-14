@@ -6,7 +6,7 @@ from nbexec import protocol as proto
 from nbexec.paths import socket_path
 
 
-def send_to_daemon(method: str, params: dict | None = None, timeout: float = 300.0) -> dict:
+def send_to_daemon(method: str, params: dict | None = None, timeout: float | None = None) -> dict:
     """Send a request to the daemon and return the response.
 
     Raises SystemExit on connection errors so CLI commands fail cleanly.
@@ -26,7 +26,7 @@ def send_to_daemon(method: str, params: dict | None = None, timeout: float = 300
     return response["result"]
 
 
-async def _send(sock_path: str, request: dict, timeout: float) -> dict:
+async def _send(sock_path: str, request: dict, timeout: float | None) -> dict:
     try:
         reader, writer = await asyncio.open_unix_connection(sock_path)
     except (ConnectionRefusedError, FileNotFoundError):
