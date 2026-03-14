@@ -27,6 +27,18 @@ The daemon is a long-running background process that holds persistent WebSocket 
 
 This is the same protocol VS Code uses when you connect a local notebook to a remote Jupyter server. The notebook document stays local, only code strings are sent to the kernel. nbexec replicates this model for CLI/agent use, using [jupyter-kernel-client](https://github.com/datalayer/jupyter-kernel-client) to manage the kernel connection.
 
+## Why a CLI and not an MCP server or raw HTTP
+
+**Clean context.** An MCP server's tool definitions live in the agent's prompt at all times. nbexec adds nothing to the prompt until the agent actually needs it — the skill loads on demand, and `--help` is only fetched when invoked.
+
+**Full visibility.** Everything inside an MCP server is opaque to the agent — it can only call the tools that are exposed. With a CLI, the agent has access to the source code, can inspect how things work, and can understand or work around issues on its own.
+
+**Persistent connections without agent coupling.** The daemon runs as a separate process, managing WebSocket connections and kernel sessions independently. The agent doesn't need to hold connections or re-establish them between calls. Sessions survive across multiple agent conversations. An MCP server's lifecycle is tied to the agent process that started it.
+
+**Fewer tokens than raw HTTP.** The agent could call the Jupyter REST API directly via curl, but that means generating verbose HTTP requests for every cell execution, manually managing XSRF tokens, parsing WebSocket message framing, and tracking kernel/session IDs. A single `nbexec exec --session spark --code "..."` replaces all of that. Less generated tokens, simpler logic, same result.
+
+**Self-documenting from the CLI.** The agent runs `nbexec --help` and gets everything it needs — commands, options, examples, workflow patterns. No need to embed documentation in MCP tool descriptions or maintain it in two places.
+
 ## Installation
 
 Requires Python 3.10+ and [uv](https://docs.astral.sh/uv/).
