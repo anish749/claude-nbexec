@@ -9,6 +9,7 @@ SESSION_CREATE = "session.create"
 SESSION_LIST = "session.list"
 SESSION_CLOSE = "session.close"
 EXEC = "exec"
+INTERRUPT = "interrupt"
 
 
 def make_request(method: str, params: dict[str, Any] | None = None) -> dict:

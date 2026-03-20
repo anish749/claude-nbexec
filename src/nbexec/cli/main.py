@@ -5,6 +5,7 @@ import click
 from .daemon_cmds import daemon
 from .session_cmds import session
 from .exec_cmd import exec_code
+from .interrupt_cmd import interrupt
 
 USAGE = """\
 nbexec — CLI daemon that proxies code execution to remote Jupyter kernels
@@ -98,6 +99,17 @@ Commands:
       Variables persist across exec calls within the same session (same
       kernel). Each exec appends a new cell to the notebook.
 
+  interrupt
+      Interrupt a currently running execution on a remote kernel. Sends a
+      SIGINT to the kernel process, which will cause most Python code to
+      raise a KeyboardInterrupt. Use this to cancel long-running cells.
+
+      Options:
+        --session ID       Session ID (required)
+
+      Example:
+        nbexec interrupt --session spark
+
       IMPORTANT — how to send code:
 
         Prefer --file for anything beyond a trivial one-liner. Write the
@@ -147,3 +159,4 @@ def cli():
 cli.add_command(daemon)
 cli.add_command(session)
 cli.add_command(exec_code, name="exec")
+cli.add_command(interrupt)

@@ -100,6 +100,11 @@ class Session:
             "text": text,
         }
 
+    def interrupt(self) -> None:
+        if self.kernel is None:
+            raise RuntimeError("Session not started")
+        self.kernel.interrupt()
+
     def close(self) -> None:
         if self.kernel is not None:
             try:

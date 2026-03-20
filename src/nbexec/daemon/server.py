@@ -88,6 +88,14 @@ class DaemonServer:
                 )
                 return proto.make_response(req_id, result)
 
+            elif method == proto.INTERRUPT:
+                session = self.state.get_session(params["session_id"])
+                await loop.run_in_executor(
+                    self.executor,
+                    lambda: session.interrupt(),
+                )
+                return proto.make_response(req_id, {"interrupted": params["session_id"]})
+
             else:
                 return proto.make_error(req_id, f"Unknown method: {method}")
 
