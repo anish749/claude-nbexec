@@ -10,6 +10,11 @@ dependencies = [
     "nbformat>=5.9",
 ]
 
+[project.urls]
+Homepage = "https://github.com/anish749/claude-nbexec"
+Repository = "https://github.com/anish749/claude-nbexec"
+Issues = "https://github.com/anish749/claude-nbexec/issues"
+
 [project.scripts]
 nbexec = "nbexec.cli.main:cli"
 

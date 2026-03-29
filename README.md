@@ -1,5 +1,7 @@
 # nbexec
 
+[![PyPI](https://img.shields.io/pypi/v/claude-nbexec)](https://pypi.org/project/claude-nbexec/)
+
 A CLI tool that lets AI agents (like Claude Code) execute code on remote Jupyter kernels. All executed code and outputs are logged to a local `.ipynb` notebook file for human review.
 
 ## Why
