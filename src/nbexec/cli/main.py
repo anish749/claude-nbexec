@@ -90,7 +90,10 @@ Commands:
 
       Options:
         --session ID       Session ID (required)
-        --file PATH        File containing code to execute (recommended)
+        --file PATH        File containing code to execute (recommended).
+                           Supports .ipynb files — all code cells in the
+                           notebook are executed sequentially on the session's
+                           kernel. Execution stops on the first cell error.
         --code CODE        Code string to execute (simple one-liners only)
         --timeout SECONDS  Execution timeout (default: no timeout).
 
