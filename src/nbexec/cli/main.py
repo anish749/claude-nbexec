@@ -113,19 +113,22 @@ Commands:
       Example:
         nbexec interrupt --session spark
 
-      IMPORTANT — how to send code:
+IMPORTANT — how to send code:
 
-        Prefer --file for anything beyond a trivial one-liner. Write the
-        code to a temporary file first, then pass the path. This avoids
-        bash escaping issues with quotes, newlines, and special characters
-        that are common in Python/SQL code.
+  Prefer --file for anything beyond a trivial one-liner. Write the
+  code to a temporary file first, then pass the path. This avoids
+  bash escaping issues with quotes, newlines, and special characters
+  that are common in Python/SQL code.
 
-        Use --code only for simple single-line expressions like:
-          nbexec exec --session spark --code "df.show()"
-          nbexec exec --session spark --code "print(x)"
+  Use --code only for simple single-line expressions like:
+    nbexec exec --session spark --code "df.show()"
+    nbexec exec --session spark --code "print(x)"
 
-        For multiline code, write to a file first, then use --file:
-          nbexec exec --session spark --file /tmp/cell.py
+  For multiline code, write to a file first, then use --file:
+    nbexec exec --session spark --file /tmp/cell.py
+
+  To run a complete .ipynb notebook, pass it directly to --file:
+    nbexec exec --session spark --file ./analysis.ipynb
 
       Running a complete notebook:
 
