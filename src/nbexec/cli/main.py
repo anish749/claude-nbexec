@@ -95,7 +95,6 @@ Commands:
                            notebook are executed sequentially on the session's
                            kernel. Execution stops on the first cell error.
         --code CODE        Code string to execute (simple one-liners only)
-        --timeout SECONDS  Execution timeout (default: no timeout).
 
       If neither --code nor --file is given, reads code from stdin.
 
@@ -113,26 +112,33 @@ Commands:
       Example:
         nbexec interrupt --session spark
 
-      IMPORTANT — how to send code:
+IMPORTANT — how to send code:
 
-        Prefer --file for anything beyond a trivial one-liner. Write the
-        code to a temporary file first, then pass the path. This avoids
-        bash escaping issues with quotes, newlines, and special characters
-        that are common in Python/SQL code.
+  Prefer --file for anything beyond a trivial one-liner. Write the
+  code to a temporary file first, then pass the path. This avoids
+  bash escaping issues with quotes, newlines, and special characters
+  that are common in Python/SQL code.
 
-        Use --code only for simple single-line expressions like:
-          nbexec exec --session spark --code "df.show()"
-          nbexec exec --session spark --code "print(x)"
+  Use --code only for simple single-line expressions like:
+    nbexec exec --session spark --code "df.show()"
+    nbexec exec --session spark --code "print(x)"
 
-        For multiline code, write to a file first, then use --file:
-          nbexec exec --session spark --file /tmp/cell.py
+  For multiline code, write to a file first, then use --file:
+    nbexec exec --session spark --file /tmp/cell.py
+
+  To run an existing .ipynb notebook (e.g. shared setup, a saved
+  analysis, or a notebook the user points you to), pass it to --file.
+  All code cells run sequentially on the session's kernel, and variables
+  persist in both directions:
+    nbexec exec --session spark --file ./analysis.ipynb
 
 Agent Workflow Examples:
 
-  Start a session and run queries interactively:
+  Start a session, run a notebook, then explore interactively:
     nbexec daemon start
     nbexec session create --server http://localhost:8888 --token $TOKEN \\
         --notebook ./session.ipynb --name spark
+    nbexec exec --session spark --file ./analysis.ipynb
     nbexec exec --session spark --code "df.show()"
     nbexec exec --session spark --file /tmp/query.py
     nbexec session close --session spark
