@@ -95,6 +95,8 @@ Commands:
                            notebook are executed sequentially on the session's
                            kernel. Execution stops on the first cell error.
         --code CODE        Code string to execute (simple one-liners only)
+        --from-cell N      Start from code cell N (1-based, inclusive, .ipynb only)
+        --to-cell N        Stop at code cell N (1-based, inclusive, .ipynb only)
 
       If neither --code nor --file is given, reads code from stdin.
 
@@ -131,6 +133,12 @@ IMPORTANT — how to send code:
   All code cells run sequentially on the session's kernel, and variables
   persist in both directions:
     nbexec exec --session spark --file ./analysis.ipynb
+
+  Use --from-cell and --to-cell to run a subset of code cells. Both are
+  1-based and inclusive. For a notebook with 10 code cells:
+    --from-cell 5              runs cells 5, 6, 7, 8, 9, 10
+    --to-cell 3                runs cells 1, 2, 3
+    --from-cell 3 --to-cell 5  runs cells 3, 4, 5
 
 Agent Workflow Examples:
 
