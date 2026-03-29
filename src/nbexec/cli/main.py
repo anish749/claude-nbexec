@@ -132,7 +132,7 @@ IMPORTANT — how to send code:
 
 Agent Workflow Examples:
 
-  Run a notebook analysis, then explore interactively:
+  Start a session, run a notebook, then explore interactively:
     nbexec daemon start
     nbexec session create --server http://localhost:8888 --token $TOKEN \\
         --notebook ./session.ipynb --name spark
