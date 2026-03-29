@@ -127,7 +127,10 @@ IMPORTANT — how to send code:
   For multiline code, write to a file first, then use --file:
     nbexec exec --session spark --file /tmp/cell.py
 
-  To run a complete .ipynb notebook, pass it directly to --file:
+  To run an existing .ipynb notebook (e.g. shared setup, a saved
+  analysis, or a notebook the user points you to), pass it to --file.
+  All code cells run sequentially on the session's kernel, and variables
+  persist in both directions:
     nbexec exec --session spark --file ./analysis.ipynb
 
 Agent Workflow Examples:
