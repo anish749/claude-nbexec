@@ -6,7 +6,7 @@ A CLI tool that lets AI agents (like Claude Code) execute code on remote Jupyter
 
 When an AI agent needs to run code on a remote compute environment — a PySpark cluster, a GPU machine, a data warehouse notebook server — there's no simple way to do it interactively. The agent can't open a Jupyter UI. It needs to send code, get results, and move on.
 
-nbexec bridges this gap. The agent calls `nbexec exec --code "..."` and gets text output on stdout. Behind the scenes, a daemon holds a persistent WebSocket connection to the remote Jupyter kernel, and every cell + output is recorded in a local `.ipynb` file that you can open in VS Code or Jupyter to see exactly what the agent did.
+nbexec bridges this gap. The agent calls `nbexec exec --code "..."` and gets text output on stdout. It can also run an existing `.ipynb` notebook on the same kernel with `nbexec exec --file ./analysis.ipynb` — all code cells execute sequentially, and variables persist across all exec calls in the session. Behind the scenes, a daemon holds a persistent WebSocket connection to the remote Jupyter kernel, and every cell + output is recorded in a local `.ipynb` file that you can open in VS Code or Jupyter to see exactly what the agent did.
 
 ## How it works
 
