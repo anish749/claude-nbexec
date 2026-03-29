@@ -130,24 +130,6 @@ IMPORTANT — how to send code:
   To run a complete .ipynb notebook, pass it directly to --file:
     nbexec exec --session spark --file ./analysis.ipynb
 
-      Running a complete notebook:
-
-        Pass a .ipynb file to --file to execute all its code cells
-        sequentially on the session's kernel:
-          nbexec exec --session spark --file ./analysis.ipynb
-
-        Markdown cells and empty code cells are skipped. Execution stops
-        on the first cell error. Progress is printed to stderr.
-
-        The notebook runs on the same kernel as all other exec calls in
-        the session, so variables flow in both directions — the notebook
-        can use variables created by prior exec calls, and variables
-        defined in the notebook are available to subsequent exec calls.
-
-        This is useful for running setup notebooks (imports, configs,
-        shared helpers) before interactive work, or replaying an existing
-        analysis on a fresh session.
-
 Agent Workflow Examples:
 
   Run a notebook analysis, then explore interactively:
