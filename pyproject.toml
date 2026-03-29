@@ -1,5 +1,5 @@
 [project]
-name = "nbexec"
+name = "claude-nbexec"
 dynamic = ["version"]
 description = "CLI daemon that proxies code execution to remote Jupyter kernels with local notebook logging"
 readme = "README.md"
