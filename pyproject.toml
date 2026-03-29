@@ -1,6 +1,6 @@
 [project]
 name = "nbexec"
-version = "0.1.0"
+dynamic = ["version"]
 description = "CLI daemon that proxies code execution to remote Jupyter kernels with local notebook logging"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -14,8 +14,11 @@ dependencies = [
 nbexec = "nbexec.cli.main:cli"
 
 [build-system]
-requires = ["hatchling"]
+requires = ["hatchling", "hatch-vcs"]
 build-backend = "hatchling.build"
+
+[tool.hatch.version]
+source = "vcs"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/nbexec"]
