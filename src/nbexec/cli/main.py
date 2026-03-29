@@ -127,12 +127,31 @@ Commands:
         For multiline code, write to a file first, then use --file:
           nbexec exec --session spark --file /tmp/cell.py
 
+      Running a complete notebook:
+
+        Pass a .ipynb file to --file to execute all its code cells
+        sequentially on the session's kernel:
+          nbexec exec --session spark --file ./analysis.ipynb
+
+        Markdown cells and empty code cells are skipped. Execution stops
+        on the first cell error. Progress is printed to stderr.
+
+        The notebook runs on the same kernel as all other exec calls in
+        the session, so variables flow in both directions — the notebook
+        can use variables created by prior exec calls, and variables
+        defined in the notebook are available to subsequent exec calls.
+
+        This is useful for running setup notebooks (imports, configs,
+        shared helpers) before interactive work, or replaying an existing
+        analysis on a fresh session.
+
 Agent Workflow Examples:
 
-  Start a session and run queries interactively:
+  Run a notebook analysis, then explore interactively:
     nbexec daemon start
     nbexec session create --server http://localhost:8888 --token $TOKEN \\
         --notebook ./session.ipynb --name spark
+    nbexec exec --session spark --file ./analysis.ipynb
     nbexec exec --session spark --code "df.show()"
     nbexec exec --session spark --file /tmp/query.py
     nbexec session close --session spark
