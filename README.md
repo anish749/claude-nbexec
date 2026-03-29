@@ -6,9 +6,9 @@ A CLI tool that lets AI agents (like Claude Code) execute code on remote Jupyter
 
 ## Why
 
-When an AI agent needs to run code on a remote compute environment — a PySpark cluster, a GPU machine, a data warehouse notebook server — the options are limited. An agent could use browser automation to interact with a Jupyter UI, but that's slow and token-expensive. It just needs to send code, get results, and move on.
+When an AI agent needs to run code on a remote compute environment (a PySpark cluster, a GPU machine, a data warehouse notebook server), the options are limited. An agent could use browser automation to interact with a Jupyter UI, but that's slow and token-expensive. It just needs to send code, get results, and move on.
 
-nbexec provides a token-efficient way to do this. The agent calls `nbexec exec --code "..."` and gets text output on stdout. Python execution state persists across calls — variables, imports, and dataframes created in one `exec` are available in the next, giving the agent a persistent runtime across multiple tool calls. It can also run an existing `.ipynb` notebook on the same kernel with `nbexec exec --file ./analysis.ipynb`. Behind the scenes, a daemon holds a persistent WebSocket connection to the remote Jupyter kernel, and every cell + output is recorded in a local `.ipynb` file that you can open in VS Code or Jupyter to see exactly what the agent did.
+nbexec provides a token-efficient way to do this. The agent calls `nbexec exec --code "..."` and gets text output on stdout. Python execution state persists across calls: variables, imports, and dataframes created in one `exec` are available in the next, giving the agent a persistent runtime across multiple tool calls. It can also run an existing `.ipynb` notebook on the same kernel with `nbexec exec --file ./analysis.ipynb`. Behind the scenes, a daemon holds a persistent WebSocket connection to the remote Jupyter kernel, and every cell + output is recorded in a local `.ipynb` file that you can open in VS Code or Jupyter to see exactly what the agent did.
 
 ## How it works
 
@@ -35,7 +35,7 @@ nbexec provides a token-efficient way to do this. The agent calls `nbexec exec -
        │                      │                        │
 ```
 
-The daemon is a long-running background process that holds persistent WebSocket connections to one or more remote Jupyter servers. CLI commands (`exec`, `session create`, etc.) are thin clients that talk to the daemon over a Unix socket — each `exec` is a synchronous request/response.
+The daemon is a long-running background process that holds persistent WebSocket connections to one or more remote Jupyter servers. CLI commands (`exec`, `session create`, etc.) are thin clients that talk to the daemon over a Unix socket. Each `exec` is a synchronous request/response.
 
 This is the same protocol VS Code uses when you connect a local notebook to a remote Jupyter server. The notebook document stays local, only code strings are sent to the kernel. nbexec replicates this model for CLI/agent use, using [jupyter-kernel-client](https://github.com/datalayer/jupyter-kernel-client) to manage the kernel connection.
 
@@ -70,18 +70,18 @@ All commands and options are documented in `nbexec --help`.
 
 ## Why a CLI and not an MCP server or raw HTTP
 
-**Agents don't think in cells.** Existing Jupyter MCP servers expose notebook operations — create cell, edit cell, move cell, run cell. But an agent executing code on a remote kernel doesn't care about cells. It just wants to send code and get results. It doesn't need to edit cell 5 or reorder cells — if something went wrong, it sends corrected code as the next execution. nbexec matches this model: send code, get output, move on. The notebook is just a side effect for human review, not something the agent manages.
+**Agents don't think in cells.** Existing Jupyter MCP servers expose notebook operations: create cell, edit cell, move cell, run cell. But an agent executing code on a remote kernel doesn't care about cells. It just wants to send code and get results. It doesn't need to edit cell 5 or reorder cells. If something went wrong, it sends corrected code as the next execution. nbexec matches this model: send code, get output, move on. The notebook is just a side effect for human review, not something the agent manages.
 
-**Clean context.** An MCP server's tool definitions live in the agent's prompt at all times. nbexec adds nothing to the prompt until the agent actually needs it — the skill loads on demand, and `--help` is only fetched when invoked.
+**Clean context.** An MCP server's tool definitions live in the agent's prompt at all times. nbexec adds nothing to the prompt until the agent actually needs it. The skill loads on demand, and `--help` is only fetched when invoked.
 
-**Full visibility.** Everything inside an MCP server is opaque to the agent — it can only call the tools that are exposed. With a CLI, the agent has access to the source code, can inspect how things work, and can understand or work around issues on its own.
+**Full visibility.** Everything inside an MCP server is opaque to the agent; it can only call the tools that are exposed. With a CLI, the agent has access to the source code, can inspect how things work, and can understand or work around issues on its own.
 
 **Persistent connections without agent coupling.** The daemon runs as a separate process, managing WebSocket connections and kernel sessions independently. The agent doesn't need to hold connections or re-establish them between calls. Sessions survive across multiple agent conversations. An MCP server's lifecycle is tied to the agent process that started it.
 
-**Fewer tokens than raw HTTP.** The agent could call the Jupyter REST API directly via curl, but that means generating verbose HTTP requests for every cell execution, manually managing XSRF tokens, parsing WebSocket message framing, and tracking kernel/session IDs. A single `nbexec exec --session spark --code "..."` replaces all of that. Less generated tokens, simpler logic, same result.
+**Fewer tokens than raw HTTP.** The agent could call the Jupyter REST API directly via curl, but that means generating verbose HTTP requests for every cell execution, manually managing XSRF tokens, parsing WebSocket message framing, and tracking kernel/session IDs. A single `nbexec exec --session spark --code "..."` replaces all of that: fewer generated tokens, simpler logic, same result.
 
-**Self-documenting from the CLI.** The agent runs `nbexec --help` and gets everything it needs — commands, options, examples, workflow patterns. No need to embed documentation in MCP tool descriptions or maintain it in two places.
+**Self-documenting from the CLI.** The agent runs `nbexec --help` and gets everything it needs: commands, options, examples, workflow patterns. No need to embed documentation in MCP tool descriptions or maintain it in two places.
 
 ## Inspiration
 
-The architectural pattern — a long-lived daemon process, CLI-driven interaction, persistent state across calls, and a skill file for agent discovery — is inspired by [OpenClaw](https://github.com/openclaw/openclaw). nbexec applies the same intuition to a narrower problem: giving AI coding agents structured access to remote Jupyter kernels.
+The architectural pattern (a long-lived daemon process, CLI-driven interaction, persistent state across calls, and a skill file for agent discovery) is inspired by [OpenClaw](https://github.com/openclaw/openclaw). nbexec applies the same intuition to a narrower problem: giving AI coding agents structured access to remote Jupyter kernels.
