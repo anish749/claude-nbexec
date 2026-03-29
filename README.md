@@ -47,16 +47,24 @@ The architectural pattern — a long-lived daemon process, CLI-driven interactio
 
 ## Installation
 
-Requires Python 3.10+ and [uv](https://docs.astral.sh/uv/).
+Requires Python 3.10+.
 
 ```bash
-git clone <repo-url> && cd claude-nbexec
-uv sync
+pip install claude-nbexec
+```
+
+Or with [uv](https://docs.astral.sh/uv/):
+
+```bash
+uv pip install claude-nbexec
 ```
 
 ### Install the Claude Code skill
 
+Clone the repo and run the skill installer:
+
 ```bash
+git clone https://github.com/anish749/claude-nbexec.git && cd claude-nbexec
 ./install-skill.sh
 ```
 
