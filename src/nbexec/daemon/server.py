@@ -134,6 +134,10 @@ class DaemonServer:
 
         if exec_future in done:
             disconnect.cancel()
+            try:
+                await disconnect
+            except asyncio.CancelledError:
+                pass
             return exec_future.result()
 
         # reader.read returned — check if it's truly EOF
