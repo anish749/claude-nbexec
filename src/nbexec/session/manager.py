@@ -64,7 +64,7 @@ class Session:
         self._execution_count += 1
 
         try:
-            reply = self.kernel.execute(code)
+            reply = self.kernel.execute(code, timeout=None)
         except Exception as e:
             error_output = {
                 "output_type": "error",
