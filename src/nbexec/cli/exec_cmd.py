@@ -1,3 +1,4 @@
+import signal
 import sys
 from pathlib import Path
 
@@ -13,17 +14,32 @@ def _fail(message):
     sys.exit(1)
 
 
+def _send_interrupt(session_id):
+    """Best-effort interrupt after Ctrl+C. Ignores SIGINT while sending."""
+    old_handler = signal.signal(signal.SIGINT, signal.SIG_IGN)
+    try:
+        send_to_daemon(proto.INTERRUPT, {"session_id": session_id}, timeout=5)
+    except (SystemExit, Exception):
+        pass
+    finally:
+        signal.signal(signal.SIGINT, old_handler)
+
+
 # ---------------------------------------------------------------------------
 # Single-cell execution
 # ---------------------------------------------------------------------------
 
 def _exec_one(session_id, code, timeout):
     """Execute a single code string and print output. Returns the result dict."""
-    result = send_to_daemon(
-        proto.EXEC,
-        {"session_id": session_id, "code": code},
-        timeout=timeout,
-    )
+    try:
+        result = send_to_daemon(
+            proto.EXEC,
+            {"session_id": session_id, "code": code},
+            timeout=timeout,
+        )
+    except KeyboardInterrupt:
+        _send_interrupt(session_id)
+        raise
     text = result.get("text", "")
     if text:
         click.echo(text)
@@ -63,19 +79,26 @@ def _select_range(code_cells, total, from_cell, to_cell):
 # ---------------------------------------------------------------------------
 
 def _run_cells(session_id, selected, start, total, timeout):
-    """Execute cells sequentially. Returns list of (1-based cell index, result).
+    """Execute cells sequentially. Returns (results, interrupted).
 
-    Stops after the first cell that returns an error status.
+    results is a list of (1-based cell index, result).
+    Stops after the first cell that returns an error status or on Ctrl+C.
     """
     results = []
+    interrupted = False
     for i, cell in enumerate(selected, start + 1):
         click.echo(f"--- cell {i}/{total} ---", err=True)
-        result = _exec_one(session_id, cell.source, timeout)
+        try:
+            result = _exec_one(session_id, cell.source, timeout)
+        except KeyboardInterrupt:
+            click.echo("\nInterrupted.", err=True)
+            interrupted = True
+            break
         results.append((i, result))
         if result.get("status") == "error":
             click.echo(f"Cell {i} failed, stopping.", err=True)
             break
-    return results
+    return results, interrupted
 
 
 # ---------------------------------------------------------------------------
@@ -163,13 +186,15 @@ def _exec_notebook(session_id, notebook_path, timeout, from_cell, to_cell, outpu
         click.echo(f"Executing {len(selected)} of {total} code cells from {notebook_path}", err=True)
         click.echo(f"Output notebook: {output_path}", err=True)
 
-    results = _run_cells(session_id, selected, start, total, timeout)
+    results, interrupted = _run_cells(session_id, selected, start, total, timeout)
 
     if output_path:
         out_nb = _load_output_base(output_path, notebook_path, is_partial)
         _record_results(out_nb, results)
         _write_output_notebook(out_nb, output_path)
 
+    if interrupted:
+        sys.exit(130)
     if results and results[-1][1].get("status") == "error":
         sys.exit(1)
 
@@ -208,6 +233,10 @@ def exec_code(session_id, code, file_path, timeout, from_cell, to_cell, output_p
     elif file_path is not None:
         code = Path(file_path).read_text()
 
-    result = _exec_one(session_id, code, timeout)
+    try:
+        result = _exec_one(session_id, code, timeout)
+    except KeyboardInterrupt:
+        click.echo("\nInterrupted.", err=True)
+        sys.exit(130)
     if result.get("status") == "error":
         sys.exit(1)
