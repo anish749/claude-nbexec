@@ -8,6 +8,7 @@ import pytest
 from click.testing import CliRunner
 from nbformat.v4 import new_code_cell, new_markdown_cell, new_notebook
 
+from nbexec import protocol as proto
 from nbexec.cli.exec_cmd import exec_code
 
 
@@ -541,3 +542,119 @@ class TestOutputNotebook:
 
         assert result.exit_code == 1
         assert "same file" in result.output
+
+
+class TestCtrlCInterrupt:
+    """Test that Ctrl+C during execution sends interrupt to the daemon."""
+
+    def test_single_cell_ctrl_c_sends_interrupt(self):
+        """Ctrl+C during single-cell exec interrupts the kernel and exits 130."""
+        calls = []
+
+        def fake_send(method, params, timeout=None):
+            calls.append(method)
+            if method == proto.EXEC:
+                raise KeyboardInterrupt
+            return {"interrupted": params["session_id"]}
+
+        runner = CliRunner()
+        with patch("nbexec.cli.exec_cmd.send_to_daemon", side_effect=fake_send):
+            result = runner.invoke(exec_code, ["--session", "s", "--code", "x = 1"])
+
+        assert result.exit_code == 130
+        assert "Interrupted" in result.output
+        assert calls == [proto.EXEC, proto.INTERRUPT]
+
+    def test_notebook_ctrl_c_sends_interrupt(self, tmp_path):
+        """Ctrl+C mid-notebook interrupts and exits 130."""
+        nb_path = tmp_path / "test.ipynb"
+        _make_notebook(
+            [
+                new_code_cell(source="a = 1"),
+                new_code_cell(source="time.sleep(100)"),
+                new_code_cell(source="c = 3"),
+            ],
+            nb_path,
+        )
+
+        exec_count = 0
+        calls = []
+
+        def fake_send(method, params, timeout=None):
+            nonlocal exec_count
+            calls.append(method)
+            if method == proto.EXEC:
+                exec_count += 1
+                if exec_count == 2:
+                    raise KeyboardInterrupt
+                return _make_daemon_response(text="ok\n")
+            return {"interrupted": params["session_id"]}
+
+        runner = CliRunner()
+        with patch("nbexec.cli.exec_cmd.send_to_daemon", side_effect=fake_send):
+            result = runner.invoke(
+                exec_code,
+                ["--session", "s", "--file", str(nb_path)],
+            )
+
+        assert result.exit_code == 130
+        assert "Interrupted" in result.output
+        # Cell 1 exec, cell 2 exec (interrupted), then interrupt sent
+        assert calls == [proto.EXEC, proto.EXEC, proto.INTERRUPT]
+
+    def test_notebook_ctrl_c_writes_partial_output(self, tmp_path):
+        """Interrupted notebook still writes completed cells to output."""
+        nb_path = tmp_path / "test.ipynb"
+        out_path = tmp_path / "out.ipynb"
+        _make_notebook(
+            [
+                new_code_cell(source="a = 1"),
+                new_code_cell(source="b = 2"),
+                new_code_cell(source="c = 3"),
+            ],
+            nb_path,
+        )
+
+        exec_count = 0
+
+        def fake_send(method, params, timeout=None):
+            nonlocal exec_count
+            if method == proto.EXEC:
+                exec_count += 1
+                if exec_count == 2:
+                    raise KeyboardInterrupt
+                return _make_daemon_response(
+                    text="ok\n", execution_count=1,
+                    outputs=[{"output_type": "stream", "name": "stdout", "text": "ok\n"}],
+                )
+            return {"interrupted": params["session_id"]}
+
+        runner = CliRunner()
+        with patch("nbexec.cli.exec_cmd.send_to_daemon", side_effect=fake_send):
+            result = runner.invoke(
+                exec_code,
+                ["--session", "s", "--file", str(nb_path), "--output", str(out_path)],
+            )
+
+        assert result.exit_code == 130
+        assert out_path.exists()
+        out_nb = _read_output_notebook(out_path)
+        code_cells = [c for c in out_nb.cells if c.cell_type == "code"]
+        # Only cell 1 completed; cells 2 and 3 have no outputs
+        assert len(code_cells[0].outputs) == 1
+        assert len(code_cells[1].outputs) == 0
+        assert len(code_cells[2].outputs) == 0
+
+    def test_interrupt_send_failure_still_exits(self):
+        """If sending interrupt to daemon fails, CLI still exits 130."""
+        def fake_send(method, params, timeout=None):
+            if method == proto.EXEC:
+                raise KeyboardInterrupt
+            raise ConnectionError("daemon gone")
+
+        runner = CliRunner()
+        with patch("nbexec.cli.exec_cmd.send_to_daemon", side_effect=fake_send):
+            result = runner.invoke(exec_code, ["--session", "s", "--code", "x = 1"])
+
+        assert result.exit_code == 130
+        assert "Interrupted" in result.output
