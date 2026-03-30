@@ -10,6 +10,12 @@ dependencies = [
     "nbformat>=5.9",
 ]
 
+[project.optional-dependencies]
+test = [
+    "pytest>=8.0",
+    "pytest-asyncio>=1.0",
+]
+
 [project.urls]
 Homepage = "https://github.com/anish749/claude-nbexec"
 Repository = "https://github.com/anish749/claude-nbexec"
@@ -24,6 +30,9 @@ build-backend = "hatchling.build"
 
 [tool.hatch.version]
 source = "vcs"
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/nbexec"]
