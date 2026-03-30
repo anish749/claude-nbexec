@@ -78,11 +78,12 @@ def _select_range(code_cells, total, from_cell, to_cell):
 # Cell execution loop
 # ---------------------------------------------------------------------------
 
-def _run_cells(session_id, selected, start, total, timeout):
+def _run_cells(session_id, selected, start, total, timeout, on_result=None):
     """Execute cells sequentially. Returns (results, interrupted).
 
     results is a list of (1-based cell index, result).
     Stops after the first cell that returns an error status or on Ctrl+C.
+    If on_result is provided, it is called with (cell_number, result) after each cell.
     """
     results = []
     interrupted = False
@@ -95,6 +96,8 @@ def _run_cells(session_id, selected, start, total, timeout):
             interrupted = True
             break
         results.append((i, result))
+        if on_result is not None:
+            on_result(i, result)
         if result.get("status") == "error":
             click.echo(f"Cell {i} failed, stopping.", err=True)
             break
@@ -186,12 +189,17 @@ def _exec_notebook(session_id, notebook_path, timeout, from_cell, to_cell, outpu
         click.echo(f"Executing {len(selected)} of {total} code cells from {notebook_path}", err=True)
         click.echo(f"Output notebook: {output_path}", err=True)
 
-    results, interrupted = _run_cells(session_id, selected, start, total, timeout)
-
+    # Load the output notebook upfront so we can write incrementally.
+    out_nb = None
     if output_path:
         out_nb = _load_output_base(output_path, notebook_path, is_partial)
-        _record_results(out_nb, results)
+
+    def _flush_result(cell_num, result):
+        _record_results(out_nb, [(cell_num, result)])
         _write_output_notebook(out_nb, output_path)
+
+    on_result = _flush_result if out_nb is not None else None
+    results, interrupted = _run_cells(session_id, selected, start, total, timeout, on_result)
 
     if interrupted:
         sys.exit(130)

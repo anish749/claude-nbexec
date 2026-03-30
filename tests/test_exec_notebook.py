@@ -513,6 +513,51 @@ class TestOutputNotebook:
         assert len(code_cells[0].outputs) == 1  # first cell succeeded
         assert code_cells[1].outputs[0].output_type == "error"
 
+    def test_output_written_incrementally(self, tmp_path):
+        """Output notebook is flushed to disk after each cell, not just at the end."""
+        nb_path = tmp_path / "test.ipynb"
+        out_path = tmp_path / "out.ipynb"
+        _make_notebook(
+            [
+                new_code_cell(source="a = 1"),
+                new_code_cell(source="b = 2"),
+                new_code_cell(source="c = 3"),
+            ],
+            nb_path,
+        )
+
+        snapshots = []  # snapshot output notebook state after each cell
+
+        call_count = 0
+
+        def fake_send(method, params, timeout=None):
+            nonlocal call_count
+            call_count += 1
+            # After the first cell, the output file should already exist on disk.
+            if call_count > 1 and out_path.exists():
+                snapshots.append(_read_output_notebook(out_path))
+            return _make_daemon_response(
+                text=f"r{call_count}\n", execution_count=call_count,
+                outputs=[{"output_type": "stream", "name": "stdout", "text": f"r{call_count}\n"}],
+            )
+
+        runner = CliRunner()
+        with patch("nbexec.cli.exec_cmd.send_to_daemon", side_effect=fake_send):
+            result = runner.invoke(
+                exec_code,
+                ["--session", "s", "--file", str(nb_path), "--output", str(out_path)],
+            )
+
+        assert result.exit_code == 0
+        # We should have captured 2 snapshots (before cell 2 and before cell 3)
+        assert len(snapshots) == 2
+        # After cell 1 completed, snapshot should have cell 1 output
+        code_cells_snap1 = [c for c in snapshots[0].cells if c.cell_type == "code"]
+        assert len(code_cells_snap1[0].outputs) == 1
+        assert code_cells_snap1[0].outputs[0].text == "r1\n"
+        # Cell 2 hasn't been recorded yet in this snapshot
+        assert len(code_cells_snap1[1].outputs) == 0
+
     def test_output_rejected_for_non_notebook(self, tmp_path):
         """--output only allowed with .ipynb files."""
         py_path = tmp_path / "script.py"
