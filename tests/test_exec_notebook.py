@@ -1,7 +1,5 @@
 """Tests for notebook execution via _exec_notebook."""
 
-import json
-import tempfile
 from pathlib import Path
 from unittest.mock import patch
 
@@ -21,11 +19,12 @@ def _make_notebook(cells, path):
         nbformat.write(nb, f)
 
 
-def _make_daemon_response(text="", status="ok", execution_count=1):
+def _make_daemon_response(text="", status="ok", execution_count=1, outputs=None):
     """Create a fake daemon response dict."""
-    outputs = []
-    if text:
-        outputs.append({"output_type": "stream", "name": "stdout", "text": text})
+    if outputs is None:
+        outputs = []
+        if text:
+            outputs.append({"output_type": "stream", "name": "stdout", "text": text})
     return {
         "status": status,
         "execution_count": execution_count,
@@ -33,6 +32,12 @@ def _make_daemon_response(text="", status="ok", execution_count=1):
         "outputs": outputs,
         "text": text,
     }
+
+
+def _read_output_notebook(path):
+    """Read and return a notebook from path."""
+    with open(path) as f:
+        return nbformat.read(f, as_version=4)
 
 
 class TestExecNotebook:
@@ -67,7 +72,6 @@ class TestExecNotebook:
 
         assert result.exit_code == 0
         assert call_count == 2
-        # stdout contains the text output from both cells
         assert "cell1" in result.output
         assert "cell2" in result.output
 
@@ -77,8 +81,8 @@ class TestExecNotebook:
         _make_notebook(
             [
                 new_markdown_cell(source="# Title"),
-                new_code_cell(source=""),  # empty, should be skipped
-                new_code_cell(source="   "),  # whitespace-only, should be skipped
+                new_code_cell(source=""),
+                new_code_cell(source="   "),
                 new_code_cell(source="x = 1"),
             ],
             nb_path,
@@ -99,7 +103,7 @@ class TestExecNotebook:
             )
 
         assert result.exit_code == 0
-        assert call_count == 1  # only one real code cell
+        assert call_count == 1
 
     def test_notebook_stops_on_error(self, tmp_path):
         """Execution stops at the first failing cell."""
@@ -130,7 +134,7 @@ class TestExecNotebook:
             )
 
         assert result.exit_code == 1
-        assert call_count == 2  # third cell never executed
+        assert call_count == 2
 
     def test_notebook_progress_markers(self, tmp_path):
         """Progress markers like '--- cell 1/3 ---' are printed."""
@@ -155,8 +159,6 @@ class TestExecNotebook:
             )
 
         assert result.exit_code == 0
-        # Progress markers are emitted (via click.echo(err=True) in production,
-        # but CliRunner captures everything together)
         assert "--- cell 1/3 ---" in result.output
         assert "--- cell 2/3 ---" in result.output
         assert "--- cell 3/3 ---" in result.output
@@ -252,3 +254,290 @@ class TestExecNotebook:
 
         assert result.exit_code == 0
         assert "0\n1\n2" in result.output
+
+
+class TestOutputNotebook:
+    """Test the --output flag for writing executed notebooks."""
+
+    def test_full_run_explicit_output(self, tmp_path):
+        """Full run with --output writes executed notebook to that path."""
+        nb_path = tmp_path / "input.ipynb"
+        out_path = tmp_path / "output.ipynb"
+        _make_notebook(
+            [
+                new_code_cell(source="print('hello')"),
+                new_code_cell(source="1 + 1"),
+            ],
+            nb_path,
+        )
+
+        call_count = 0
+
+        def fake_send(method, params, timeout=None):
+            nonlocal call_count
+            call_count += 1
+            if call_count == 1:
+                return _make_daemon_response(
+                    text="hello\n", execution_count=1,
+                    outputs=[{"output_type": "stream", "name": "stdout", "text": "hello\n"}],
+                )
+            return _make_daemon_response(
+                text="2", execution_count=2,
+                outputs=[{"output_type": "execute_result", "data": {"text/plain": "2"}, "metadata": {}}],
+            )
+
+        runner = CliRunner()
+        with patch("nbexec.cli.exec_cmd.send_to_daemon", side_effect=fake_send):
+            result = runner.invoke(
+                exec_code,
+                ["--session", "s", "--file", str(nb_path), "--output", str(out_path)],
+            )
+
+        assert result.exit_code == 0
+        assert out_path.exists()
+        out_nb = _read_output_notebook(out_path)
+        # Both cells should have outputs
+        code_cells = [c for c in out_nb.cells if c.cell_type == "code"]
+        assert len(code_cells) == 2
+        assert len(code_cells[0].outputs) == 1
+        assert code_cells[0].outputs[0].output_type == "stream"
+        assert code_cells[0].outputs[0].text == "hello\n"
+        assert code_cells[1].outputs[0].output_type == "execute_result"
+        assert code_cells[1].execution_count == 2
+        # stderr reports the output path
+        assert "Output notebook:" in result.output
+
+    def test_full_run_auto_output(self, tmp_path):
+        """Full run without --output auto-generates <input>_out.ipynb."""
+        nb_path = tmp_path / "analysis.ipynb"
+        _make_notebook([new_code_cell(source="x = 1")], nb_path)
+
+        def fake_send(method, params, timeout=None):
+            return _make_daemon_response(text="", execution_count=1)
+
+        runner = CliRunner()
+        with patch("nbexec.cli.exec_cmd.send_to_daemon", side_effect=fake_send):
+            result = runner.invoke(
+                exec_code,
+                ["--session", "s", "--file", str(nb_path)],
+            )
+
+        assert result.exit_code == 0
+        auto_path = tmp_path / "analysis_out.ipynb"
+        assert auto_path.exists()
+        assert str(auto_path) in result.output
+
+    def test_partial_run_no_output_flag(self, tmp_path):
+        """Partial run without --output does NOT write an output notebook."""
+        nb_path = tmp_path / "test.ipynb"
+        _make_notebook(
+            [new_code_cell(source="a = 1"), new_code_cell(source="b = 2")],
+            nb_path,
+        )
+
+        def fake_send(method, params, timeout=None):
+            return _make_daemon_response(text="ok\n")
+
+        runner = CliRunner()
+        with patch("nbexec.cli.exec_cmd.send_to_daemon", side_effect=fake_send):
+            result = runner.invoke(
+                exec_code,
+                ["--session", "s", "--file", str(nb_path), "--from-cell", "1", "--to-cell", "1"],
+            )
+
+        assert result.exit_code == 0
+        # No output notebook created
+        assert not (tmp_path / "test_out.ipynb").exists()
+        assert "Output notebook:" not in result.output
+
+    def test_partial_run_with_output(self, tmp_path):
+        """Partial run with --output writes only the executed cells' outputs."""
+        nb_path = tmp_path / "test.ipynb"
+        out_path = tmp_path / "out.ipynb"
+        _make_notebook(
+            [
+                new_code_cell(source="a = 1"),
+                new_code_cell(source="b = 2"),
+                new_code_cell(source="c = 3"),
+            ],
+            nb_path,
+        )
+
+        def fake_send(method, params, timeout=None):
+            return _make_daemon_response(
+                text="done\n", execution_count=1,
+                outputs=[{"output_type": "stream", "name": "stdout", "text": "done\n"}],
+            )
+
+        runner = CliRunner()
+        with patch("nbexec.cli.exec_cmd.send_to_daemon", side_effect=fake_send):
+            result = runner.invoke(
+                exec_code,
+                [
+                    "--session", "s", "--file", str(nb_path),
+                    "--from-cell", "2", "--to-cell", "2",
+                    "--output", str(out_path),
+                ],
+            )
+
+        assert result.exit_code == 0
+        out_nb = _read_output_notebook(out_path)
+        code_cells = [c for c in out_nb.cells if c.cell_type == "code"]
+        # Cell 2 (index 1) has outputs, cells 1 and 3 do not
+        assert len(code_cells[0].outputs) == 0
+        assert len(code_cells[1].outputs) == 1
+        assert code_cells[1].outputs[0].text == "done\n"
+        assert len(code_cells[2].outputs) == 0
+
+    def test_partial_run_incremental_output(self, tmp_path):
+        """Two partial runs into the same output file accumulate outputs."""
+        nb_path = tmp_path / "test.ipynb"
+        out_path = tmp_path / "out.ipynb"
+        _make_notebook(
+            [
+                new_code_cell(source="a = 1"),
+                new_code_cell(source="b = 2"),
+            ],
+            nb_path,
+        )
+
+        call_count = 0
+
+        def fake_send(method, params, timeout=None):
+            nonlocal call_count
+            call_count += 1
+            return _make_daemon_response(
+                text=f"r{call_count}\n", execution_count=call_count,
+                outputs=[{"output_type": "stream", "name": "stdout", "text": f"r{call_count}\n"}],
+            )
+
+        runner = CliRunner()
+        with patch("nbexec.cli.exec_cmd.send_to_daemon", side_effect=fake_send):
+            # First partial run: cell 1
+            runner.invoke(
+                exec_code,
+                ["--session", "s", "--file", str(nb_path),
+                 "--from-cell", "1", "--to-cell", "1",
+                 "--output", str(out_path)],
+            )
+            # Second partial run: cell 2
+            runner.invoke(
+                exec_code,
+                ["--session", "s", "--file", str(nb_path),
+                 "--from-cell", "2", "--to-cell", "2",
+                 "--output", str(out_path)],
+            )
+
+        out_nb = _read_output_notebook(out_path)
+        code_cells = [c for c in out_nb.cells if c.cell_type == "code"]
+        # Both cells should have outputs from their respective runs
+        assert len(code_cells[0].outputs) == 1
+        assert code_cells[0].outputs[0].text == "r1\n"
+        assert len(code_cells[1].outputs) == 1
+        assert code_cells[1].outputs[0].text == "r2\n"
+
+    def test_output_preserves_markdown_cells(self, tmp_path):
+        """Output notebook preserves markdown cells from the input."""
+        nb_path = tmp_path / "test.ipynb"
+        out_path = tmp_path / "out.ipynb"
+        _make_notebook(
+            [
+                new_markdown_cell(source="# Header"),
+                new_code_cell(source="x = 42"),
+                new_markdown_cell(source="## Section 2"),
+            ],
+            nb_path,
+        )
+
+        def fake_send(method, params, timeout=None):
+            return _make_daemon_response(text="", execution_count=1)
+
+        runner = CliRunner()
+        with patch("nbexec.cli.exec_cmd.send_to_daemon", side_effect=fake_send):
+            result = runner.invoke(
+                exec_code,
+                ["--session", "s", "--file", str(nb_path), "--output", str(out_path)],
+            )
+
+        assert result.exit_code == 0
+        out_nb = _read_output_notebook(out_path)
+        assert len(out_nb.cells) == 3
+        assert out_nb.cells[0].cell_type == "markdown"
+        assert out_nb.cells[0].source == "# Header"
+        assert out_nb.cells[1].cell_type == "code"
+        assert out_nb.cells[2].cell_type == "markdown"
+        assert out_nb.cells[2].source == "## Section 2"
+
+    def test_output_written_on_error(self, tmp_path):
+        """Output notebook is still written when a cell fails."""
+        nb_path = tmp_path / "test.ipynb"
+        out_path = tmp_path / "out.ipynb"
+        _make_notebook(
+            [
+                new_code_cell(source="ok()"),
+                new_code_cell(source="fail()"),
+            ],
+            nb_path,
+        )
+
+        call_count = 0
+
+        def fake_send(method, params, timeout=None):
+            nonlocal call_count
+            call_count += 1
+            if call_count == 2:
+                return _make_daemon_response(
+                    text="NameError", status="error", execution_count=2,
+                    outputs=[{"output_type": "error", "ename": "NameError",
+                              "evalue": "name 'fail' is not defined",
+                              "traceback": ["NameError: name 'fail' is not defined"]}],
+                )
+            return _make_daemon_response(
+                text="ok\n", execution_count=1,
+                outputs=[{"output_type": "stream", "name": "stdout", "text": "ok\n"}],
+            )
+
+        runner = CliRunner()
+        with patch("nbexec.cli.exec_cmd.send_to_daemon", side_effect=fake_send):
+            result = runner.invoke(
+                exec_code,
+                ["--session", "s", "--file", str(nb_path), "--output", str(out_path)],
+            )
+
+        assert result.exit_code == 1
+        # Output notebook is still written with partial results
+        assert out_path.exists()
+        out_nb = _read_output_notebook(out_path)
+        code_cells = [c for c in out_nb.cells if c.cell_type == "code"]
+        assert len(code_cells[0].outputs) == 1  # first cell succeeded
+        assert code_cells[1].outputs[0].output_type == "error"
+
+    def test_output_rejected_for_non_notebook(self, tmp_path):
+        """--output only allowed with .ipynb files."""
+        py_path = tmp_path / "script.py"
+        py_path.write_text("x = 1\n")
+
+        runner = CliRunner()
+        with patch("nbexec.cli.exec_cmd.send_to_daemon"):
+            result = runner.invoke(
+                exec_code,
+                ["--session", "s", "--file", str(py_path), "--output", "out.ipynb"],
+            )
+
+        assert result.exit_code == 1
+        assert "--output" in result.output
+
+    def test_output_same_as_input_rejected(self, tmp_path):
+        """--output pointing to the same file as --file is rejected."""
+        nb_path = tmp_path / "test.ipynb"
+        _make_notebook([new_code_cell(source="x = 1")], nb_path)
+
+        runner = CliRunner()
+        with patch("nbexec.cli.exec_cmd.send_to_daemon"):
+            result = runner.invoke(
+                exec_code,
+                ["--session", "s", "--file", str(nb_path), "--output", str(nb_path)],
+            )
+
+        assert result.exit_code == 1
+        assert "same file" in result.output
