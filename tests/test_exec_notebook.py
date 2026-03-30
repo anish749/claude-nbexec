@@ -526,3 +526,18 @@ class TestOutputNotebook:
 
         assert result.exit_code == 1
         assert "--output" in result.output
+
+    def test_output_same_as_input_rejected(self, tmp_path):
+        """--output pointing to the same file as --file is rejected."""
+        nb_path = tmp_path / "test.ipynb"
+        _make_notebook([new_code_cell(source="x = 1")], nb_path)
+
+        runner = CliRunner()
+        with patch("nbexec.cli.exec_cmd.send_to_daemon"):
+            result = runner.invoke(
+                exec_code,
+                ["--session", "s", "--file", str(nb_path), "--output", str(nb_path)],
+            )
+
+        assert result.exit_code == 1
+        assert "same file" in result.output

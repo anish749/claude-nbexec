@@ -95,7 +95,8 @@ def _resolve_output_path(output_path, notebook_path, is_partial):
 def _load_output_base(output_path, notebook_path, is_partial):
     """Load the base notebook for output.
 
-    For partial runs, prefer the existing output file so prior results are preserved.
+    Full runs always start from the input notebook (all cells will be re-executed).
+    Partial runs prefer the existing output file so prior results are preserved.
     """
     if is_partial and Path(output_path).exists():
         return nbformat.read(output_path, as_version=4)
@@ -117,11 +118,10 @@ def _record_results(out_nb, results):
 
 
 def _write_output_notebook(out_nb, output_path):
-    """Write a notebook to disk and report the path on stderr."""
+    """Write a notebook to disk."""
     Path(output_path).parent.mkdir(parents=True, exist_ok=True)
     with open(output_path, "w") as f:
         nbformat.write(out_nb, f)
-    click.echo(f"Output notebook: {output_path}", err=True)
 
 
 def _to_nb_output(output):
@@ -158,9 +158,13 @@ def _exec_notebook(session_id, notebook_path, timeout, from_cell, to_cell, outpu
     start, selected = _select_range(code_cells, total, from_cell, to_cell)
     is_partial = from_cell is not None or to_cell is not None
 
+    output_path = _resolve_output_path(output_path, notebook_path, is_partial)
+    if output_path:
+        click.echo(f"Executing {len(selected)} of {total} code cells from {notebook_path}", err=True)
+        click.echo(f"Output notebook: {output_path}", err=True)
+
     results = _run_cells(session_id, selected, start, total, timeout)
 
-    output_path = _resolve_output_path(output_path, notebook_path, is_partial)
     if output_path:
         out_nb = _load_output_base(output_path, notebook_path, is_partial)
         _record_results(out_nb, results)
@@ -181,7 +185,7 @@ def _exec_notebook(session_id, notebook_path, timeout, from_cell, to_cell, outpu
 @click.option("--timeout", default=None, type=float, help="Execution timeout in seconds (default: no timeout)")
 @click.option("--from-cell", "from_cell", default=None, type=int, help="Start from this code cell (1-based, inclusive). Only for .ipynb files.")
 @click.option("--to-cell", "to_cell", default=None, type=int, help="Stop at this code cell (1-based, inclusive). Only for .ipynb files.")
-@click.option("--output", "output_path", default=None, type=click.Path(), help="Output notebook path. Only for .ipynb files.")
+@click.option("--output", "output_path", default=None, type=click.Path(), help="Path to write the executed notebook with outputs. Only for .ipynb files. For full runs, defaults to <input>_out.ipynb if not specified. For partial runs (--from-cell/--to-cell), only written when explicitly provided; prior cell outputs in the file are preserved.")
 def exec_code(session_id, code, file_path, timeout, from_cell, to_cell, output_path):
     """Execute code on a remote kernel."""
     is_notebook = file_path is not None and file_path.endswith(".ipynb")
@@ -190,6 +194,8 @@ def exec_code(session_id, code, file_path, timeout, from_cell, to_cell, output_p
         _fail("--from-cell and --to-cell can only be used with .ipynb files")
     if output_path and not is_notebook:
         _fail("--output can only be used with .ipynb files")
+    if output_path and file_path and Path(output_path).resolve() == Path(file_path).resolve():
+        _fail("--output must not be the same file as --file")
 
     if is_notebook:
         _exec_notebook(session_id, file_path, timeout, from_cell, to_cell, output_path)
