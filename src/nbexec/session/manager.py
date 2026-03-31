@@ -4,6 +4,7 @@ from datetime import datetime, timezone
 import requests
 from jupyter_kernel_client import KernelClient
 
+from .diagnostics import diagnose_connection_error, is_connection_error
 from .notebook import NotebookWriter
 
 
@@ -66,11 +67,18 @@ class Session:
         try:
             reply = self.kernel.execute(code, timeout=None)
         except Exception as e:
+            if is_connection_error(e):
+                kernel_id = self.kernel.id if self.kernel else None
+                message = diagnose_connection_error(
+                    self.server_url, self.token, kernel_id,
+                )
+            else:
+                message = str(e)
             error_output = {
                 "output_type": "error",
                 "ename": type(e).__name__,
-                "evalue": str(e),
-                "traceback": [str(e)],
+                "evalue": message,
+                "traceback": [message],
             }
             self.notebook.set_outputs(cell_index, [error_output])
             self.notebook.set_execution_count(cell_index, self._execution_count)
@@ -80,7 +88,7 @@ class Session:
                 "execution_count": self._execution_count,
                 "cell_index": cell_index,
                 "outputs": [error_output],
-                "text": str(e),
+                "text": message,
             }
 
         outputs = self._extract_outputs(reply)
