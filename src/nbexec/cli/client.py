@@ -28,7 +28,7 @@ def send_to_daemon(method: str, params: dict | None = None, timeout: float | Non
 
 async def _send(sock_path: str, request: dict, timeout: float | None) -> dict:
     try:
-        reader, writer = await asyncio.open_unix_connection(sock_path)
+        reader, writer = await asyncio.open_unix_connection(sock_path, limit=proto.STREAM_LIMIT)
     except (ConnectionRefusedError, FileNotFoundError):
         print("Error: cannot connect to daemon. Is it running?", file=sys.stderr)
         sys.exit(1)

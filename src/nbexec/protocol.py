@@ -3,6 +3,10 @@ import uuid
 from typing import Any
 
 
+# Max bytes for one newline-delimited message. Replaces asyncio's 64 KiB
+# StreamReader default, above which readline() raises ValueError.
+STREAM_LIMIT = 64 * 1024 * 1024
+
 # Method names
 DAEMON_STOP = "daemon.stop"
 SESSION_CREATE = "session.create"

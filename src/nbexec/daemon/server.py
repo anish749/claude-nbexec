@@ -163,7 +163,9 @@ class DaemonServer:
         # Clean up stale socket
         sock.unlink(missing_ok=True)
 
-        server = await asyncio.start_unix_server(self.handle_client, path=str(sock))
+        server = await asyncio.start_unix_server(
+            self.handle_client, path=str(sock), limit=proto.STREAM_LIMIT,
+        )
         logger.info("Daemon listening on %s", sock)
 
         # Wait for shutdown signal
